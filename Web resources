@@ -1,0 +1,18 @@
+Library for Dallas Temperature sensor and OneWire; also has arduino sketches for ds18b20
+  http://www.hobbytronics.co.uk/ds18b20-arduino
+Sketch for Dallas/maxim temperature sensor for multiple sensors
+  http://arduino-info.wikispaces.com/Brick-Temperature-DS18B20
+Link to purchase Mexelis contactless/IR thermometer
+  http://www.digikey.com/product-detail/en/melexis-technologies-nv/MLX90615SSG-DAG-000-TU/MLX90615SSG-DAG-000-TU-ND/3641024
+Helpful tips on wiring and sketches for Mexelis Digital IR Temperature sensor (MLX90614):
+  https://learn.sparkfun.com/tutorials/mlx90614-ir-thermometer-hookup-guide 
+Library for MLX90614 from Ada fruit  
+  https://github.com/adafruit/Adafruit-MLX90614-Library
+Youtube video for wiring IR thermometers
+  https://www.youtube.com/watch?v=Ir2KO3cC5f0 
+Ada fruit board for datalogger with SD card
+  https://learn.adafruit.com/adafruit-data-logger-shield 
+
+
+Photoreceptors
+  http://www.deviceplus.com/how-tos/arduino-guide/entry015/
