@@ -1,0 +1,50 @@
+#include "MLX90615.h"
+#include <I2cMaster.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+
+#define SDA_PIN 3   //define the SDA pin
+#define SCL_PIN 2   //define the SCL pin
+#define ONE_WIRE_BUS 4
+
+SoftI2cMaster i2c(SDA_PIN, SCL_PIN);
+MLX90615 mlx90615(DEVICE_ADDR, &i2c);
+OneWire ourWire(ONE_WIRE_BUS);
+DallasTemperature sensors(&ourWire);
+
+void setup()
+{
+  Serial.begin(9600);
+  Serial.println("Setup...");
+
+  //mlx90615.writeEEPROM(Default_Emissivity); //write data into EEPROM when you need to adjust emissivity.
+  //mlx90615.readEEPROM(); //read EEPROM data to check whether it's a default one.
+}
+
+void loop()
+{
+  Serial.print("Object temperature: ");
+  Serial.println(mlx90615.getTemperature(MLX90615_OBJECT_TEMPERATURE));
+  Serial.print("Ambient temperature: ");
+  Serial.println(mlx90615.getTemperature(MLX90615_AMBIENT_TEMPERATURE));
+  
+  delay(100);
+
+/*-(start serial port to see results )-*/
+delay(100);
+Serial.begin(9600);
+delay(100);
+
+/*-( Start up the DallasTemperature library )-*/
+sensors.begin();
+
+Serial.println();
+Serial.print("");
+sensors.requestTemperatures(); // Send the command to get temperatures
+Serial.println("");
+
+Serial.print("Dallas Device 1: ");
+Serial.print(sensors.getTempCByIndex(0));
+Serial.println("");
+delay(1000);
+}/* --(end main loop )-- */
