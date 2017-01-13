@@ -6,6 +6,8 @@ Link to purchase Mexelis contactless/IR thermometer
   http://www.digikey.com/product-detail/en/melexis-technologies-nv/MLX90615SSG-DAG-000-TU/MLX90615SSG-DAG-000-TU-ND/3641024
 Helpful tips on wiring and sketches for Mexelis Digital IR Temperature sensor (MLX90614):
   https://learn.sparkfun.com/tutorials/mlx90614-ir-thermometer-hookup-guide 
+Library for IR temperature sensor MLX90615 (This is what I used)- also contains sketches accessible via "Examples" in arduino
+  https://github.com/Seeed-Studio/Digital_Infrared_Temperature_Sensor_MLX90615
 Library for MLX90614 from Ada fruit  
   https://github.com/adafruit/Adafruit-MLX90614-Library
 Youtube video for wiring IR thermometers
