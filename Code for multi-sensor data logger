@@ -1,0 +1,320 @@
+#include <SPI.h>
+#include <SD.h>
+#include <Wire.h>  
+#include "RTClib.h"
+#include "MLX90615.h"   // i called this and the following libraries//
+#include <I2cMaster.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+
+// A simple data logger for the Arduino analog pins
+
+// how many milliseconds between grabbing data and logging it. 1000 ms is once a second
+#define LOG_INTERVAL  5000 // mills between entries (reduce to take more/faster data)
+
+// how many milliseconds before writing the logged data permanently to disk
+// set it to the LOG_INTERVAL to write each time (safest)
+// set it to 10*LOG_INTERVAL to write all data every 10 datareads, you could lose up to 
+// the last 10 reads if power is lost but it uses less power and is much faster!
+#define SYNC_INTERVAL 5000 // mills between calls to flush() - to write data to the card
+uint32_t syncTime = 0; // time of last sync()
+
+#define ECHO_TO_SERIAL   1 // echo data to serial port
+#define WAIT_TO_START    0 // Wait for serial input in setup()
+
+// the digital pins that connect to the LEDs
+#define redLEDpin 5         // i changed the pin number from 2/
+#define greenLEDpin 6       // i changed the pin number from 3/
+
+#define SDA_PIN 3   //define the SDA pin // I included the ff definitions/
+#define SCL_PIN 2   //define the SCL pin
+#define ONE_WIRE_BUS 4
+
+SoftI2cMaster i2c(SDA_PIN, SCL_PIN); // I inserted this/
+MLX90615 mlx90615(DEVICE_ADDR, &i2c);
+OneWire ourWire(ONE_WIRE_BUS);
+DallasTemperature sensors(&ourWire);
+
+DeviceAddress Probe01 = { 0x28, 0xFF, 0xB6, 0xBB, 0x70, 0x16, 0x05, 0x08 }; 
+DeviceAddress Probe02 = { 0x28, 0xFF, 0x38, 0xB6, 0x70, 0x16, 0x05, 0xFC };
+DeviceAddress Probe03 = { 0x28, 0xFF, 0x35, 0xA2, 0x71, 0x16, 0x03, 0x50 };
+DeviceAddress Probe04 = { 0x28, 0xFF, 0x88, 0xAD, 0x70, 0x16, 0x04, 0x41 };
+DeviceAddress Probe05 = { 0x28, 0xFF, 0x0E, 0xB0, 0x70, 0x16, 0x05, 0xED };
+DeviceAddress Probe06 = { 0x28, 0xFF, 0x41, 0xEA, 0x70, 0x16, 0x04, 0xF6 };
+DeviceAddress Probe07 = { 0x28, 0xFF, 0x26, 0x98, 0x70, 0x16, 0x04, 0x19 };
+DeviceAddress Probe08 = { 0x28, 0xFF, 0xA4, 0xB6, 0x70, 0x16, 0x05, 0x6A };
+DeviceAddress ProbeA = { 0x28, 0xFF, 0x6D, 0x3C, 0x88, 0x16, 0x03, 0x0C };
+DeviceAddress ProbeB = { 0x28, 0xFF, 0x1A, 0x62, 0x87, 0x16, 0x03, 0xA2 };
+DeviceAddress ProbeC = { 0x28, 0xFF, 0x96, 0x1E, 0x88, 0x16, 0x03, 0xAD };
+DeviceAddress ProbeD = { 0x28, 0xFF, 0xD9, 0x7F, 0x90, 0x16, 0x04, 0xD8 };
+
+
+RTC_PCF8523 RTC; // define the Real Time Clock object // I included this but its not highlighted/
+
+// for the data logging shield, we use digital pin 10 for the SD cs line
+const int chipSelect = 10;
+
+// the logging file
+File logfile;
+
+void error(char *str)
+{
+  Serial.print("error: ");
+  Serial.println(str);
+  
+  // red LED indicates error
+  digitalWrite(redLEDpin, HIGH);
+
+  while(1);
+}
+
+void setup(void)
+{
+  Serial.begin(9600);
+  Serial.println("Initializing Temperature Control Library Version "); // I added the info in the brackets
+  Serial.println(DALLASTEMPLIBVERSION); // I included this info
+
+    // Initialize the Temperature measurement library // I added this and the following from the multiple sensor code
+  sensors.begin();
+  
+  // set the resolution to 10 bit (Can be 9 to 12 bits .. lower is faster)
+  sensors.setResolution(Probe01, 10);
+  sensors.setResolution(Probe02, 10);
+  sensors.setResolution(Probe03, 10);
+  sensors.setResolution(Probe04, 10);
+  sensors.setResolution(Probe05, 10);
+  sensors.setResolution(Probe06, 10);
+  sensors.setResolution(Probe07, 10);
+  sensors.setResolution(Probe08, 10);
+  sensors.setResolution(ProbeA, 10);
+  sensors.setResolution(ProbeB, 10);
+  sensors.setResolution(ProbeC, 10);
+  sensors.setResolution(ProbeD, 10); // end of my additions
+  
+    delay(100);
+  Serial.println();
+  Serial.print("Number of Devices found on bus = ");  
+  Serial.println(sensors.getDeviceCount());   
+  Serial.print("Getting temperatures... ");  
+  Serial.println(); 
+  
+  // use debugging LEDs
+  pinMode(redLEDpin, OUTPUT);
+  pinMode(greenLEDpin, OUTPUT);
+  
+#if WAIT_TO_START
+  Serial.println("Type any character to start");
+  while (!Serial.available());
+#endif //WAIT_TO_START
+
+  // initialize the SD card
+  Serial.print("Initializing SD card...");
+  // make sure that the default chip select pin is set to
+  // output, even if you don't use it:
+  pinMode(10, OUTPUT);
+  
+  // see if the card is present and can be initialized:
+  if (!SD.begin(chipSelect)) {
+    error("Card failed, or not present");
+  }
+  Serial.println("card initialized.");
+  
+  // create a new file
+  char filename[] = "LOGGER00.CSV";
+  for (uint8_t i = 0; i < 100; i++) {
+    filename[6] = i/10 + '0';
+    filename[7] = i%10 + '0';
+    if (! SD.exists(filename)) {
+      // only open a new file if it doesn't exist
+      logfile = SD.open(filename, FILE_WRITE); 
+      break;  // leave the loop!
+    }
+  }
+  
+  if (! logfile) {
+    error("couldnt create file");
+  }
+  
+  Serial.print("Logging to: ");
+  Serial.println(filename);
+
+  // connect to RTC
+ Wire.begin();
+  if (!RTC.begin()) {
+    logfile.println("RTC failed");
+#if ECHO_TO_SERIAL
+    Serial.println("RTC failed");
+#endif  //ECHO_TO_SERIAL
+  }
+  
+  logfile.println("millis,stamp,datetime,leaftemp,ambtemp,Probe01,Probe02, Probe03,Probe04,Probe05,Probe06,Probe07,Probe08,ProbeA,ProbeB,ProbeC,ProbeD"); 
+#if ECHO_TO_SERIAL
+  Serial.println("millis,stamp,datetime,leaftemp,ambtemp,Probe01,Probe02, Probe03,Probe04,Probe05,Probe06,Probe07,Probe08,ProbeA,ProbeB,ProbeC,ProbeD");
+#endif //ECHO_TO_SERIAL
+ 
+}
+
+void loop(void)
+{
+  DateTime now;
+
+  // delay for the amount of time we want between readings
+  delay((LOG_INTERVAL -1) - (millis() % LOG_INTERVAL));
+  
+  digitalWrite(greenLEDpin, HIGH);
+  
+  // log milliseconds since starting
+  uint32_t m = millis();
+  logfile.print(m);           // milliseconds since start
+  logfile.print(", ");    
+#if ECHO_TO_SERIAL
+  Serial.print(m);         // milliseconds since start
+  Serial.print(", ");  
+#endif
+
+  // fetch the time
+  now = RTC.now();
+  // log time
+  logfile.print(now.unixtime()); // seconds since 1/1/1970
+  logfile.print(", ");
+  logfile.print('"');
+  logfile.print(now.year(), DEC);
+  logfile.print("/");
+  logfile.print(now.month(), DEC);
+  logfile.print("/");
+  logfile.print(now.day(), DEC);
+  logfile.print(" ");
+  logfile.print(now.hour(), DEC);
+  logfile.print(":");
+  logfile.print(now.minute(), DEC);
+  logfile.print(":");
+  logfile.print(now.second(), DEC);
+  logfile.print('"');
+#if ECHO_TO_SERIAL
+  Serial.print(now.unixtime()); // seconds since 1/1/1970
+  Serial.print(", ");
+  Serial.print('"');
+  Serial.print(now.year(), DEC);
+  Serial.print("/");
+  Serial.print(now.month(), DEC);
+  Serial.print("/");
+  Serial.print(now.day(), DEC);
+  Serial.print(" ");
+  Serial.print(now.hour(), DEC);
+  Serial.print(":");
+  Serial.print(now.minute(), DEC);
+  Serial.print(":");
+  Serial.print(now.second(), DEC);
+  Serial.print('"');
+#endif //ECHO_TO_SERIAL
+  
+  logfile.print(", ");    
+  logfile.print(mlx90615.getTemperature(MLX90615_OBJECT_TEMPERATURE));
+  logfile.print(", ");    
+  logfile.print(mlx90615.getTemperature(MLX90615_AMBIENT_TEMPERATURE));
+#if ECHO_TO_SERIAL
+  Serial.print(", ");   
+  Serial.print(mlx90615.getTemperature(MLX90615_OBJECT_TEMPERATURE));
+  Serial.print(", ");    
+  Serial.print(mlx90615.getTemperature(MLX90615_AMBIENT_TEMPERATURE));
+#endif //ECHO_TO_SERIAL
+ 
+  sensors.requestTemperatures(); //sends command to request temperature/
+  logfile.print(", ");
+  logfile.print(sensors.getTempC(Probe01)); // I changed this and included the subsequent information. Previously was 'logfile.print(sensors.getTempCByIndex(0))';
+  logfile.print(", ");
+  logfile.print(sensors.getTempC(Probe02));
+  logfile.print(", ");
+  logfile.print(sensors.getTempC(Probe03));
+    logfile.print(", ");
+  logfile.print(sensors.getTempC(Probe04));
+  logfile.print(", ");
+  logfile.print(sensors.getTempC(Probe05));
+    logfile.print(", ");
+    logfile.print(sensors.getTempC(Probe06));
+  logfile.print(", ");
+  logfile.print(sensors.getTempC(Probe07));
+    logfile.print(", ");
+  logfile.print(sensors.getTempC(Probe08));
+  logfile.print(", ");
+  logfile.print(sensors.getTempC(ProbeA));
+    logfile.print(", ");
+  logfile.print(sensors.getTempC(ProbeB));
+    logfile.print(", ");
+  logfile.print(sensors.getTempC(ProbeC));
+    logfile.print(", ");
+  logfile.print(sensors.getTempC(ProbeD));
+#if ECHO_TO_SERIAL
+  Serial.print(", "); 
+  // printTemperature(Probe01);  
+   Serial.print(sensors.getTempC(Probe01));
+    Serial.print(", "); 
+    // printTemperature(Probe02);  
+   Serial.print(sensors.getTempC(Probe02));
+    Serial.print(", "); 
+    // printTemperature(Probe03);  
+ Serial.print(sensors.getTempC(Probe03));
+   Serial.print(", "); 
+  // printTemperature(Probe04);  
+   Serial.print(sensors.getTempC(Probe04));
+    Serial.print(", "); 
+    // printTemperature(Probe05);  
+   Serial.print(sensors.getTempC(Probe05));
+    Serial.print(", "); 
+  //   printTemperature(Probe06);  
+  Serial.print(sensors.getTempC(Probe06));
+    Serial.print(", "); 
+    // printTemperature(Probe07);  
+   Serial.print(sensors.getTempC(Probe07));
+    Serial.print(", "); 
+   //  printTemperature(Probe08);  
+  Serial.print(sensors.getTempC(Probe08));
+     Serial.print(", "); 
+   //  printTemperature(ProbeA);  
+  Serial.print(sensors.getTempC(ProbeA));
+      Serial.print(", "); 
+   //  printTemperature(ProbeB);  
+  Serial.print(sensors.getTempC(ProbeB));
+      Serial.print(", "); 
+   //  printTemperature(ProbeC);  
+  Serial.print(sensors.getTempC(ProbeC));
+      Serial.print(", "); 
+    // printTemperature(ProbeD);  
+  Serial.print(sensors.getTempC(ProbeD));
+#endif // ECHO_TO_SERIAL
+
+  logfile.println();
+#if ECHO_TO_SERIAL
+  Serial.println();
+#endif // ECHO_TO_SERIAL
+
+  digitalWrite(greenLEDpin, LOW);
+
+  // Now we write data to disk! Don't sync too often - requires 2048 bytes of I/O to SD card
+  // which uses a bunch of power and takes time
+  if ((millis() - syncTime) < SYNC_INTERVAL) return;
+  syncTime = millis();
+  
+  // blink LED to show we are syncing data to the card & updating FAT!
+  digitalWrite(redLEDpin, HIGH);
+  logfile.flush();
+  digitalWrite(redLEDpin, LOW);
+  
+}
+
+/*-----( Declare User-written Functions )-----*/
+void printTemperature(DeviceAddress deviceAddress)
+{
+
+float tempC = sensors.getTempC(deviceAddress);
+
+  // if (tempC == -127.00) 
+  // {
+ //  Serial.print("Error getting temperature  ");
+ //  } 
+ //  else
+ //  {
+    Serial.print(tempC);
+  //  Serial.print (", ");
+ 
+}
