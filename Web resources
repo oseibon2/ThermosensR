@@ -14,7 +14,10 @@ Youtube video for wiring IR thermometers
   https://www.youtube.com/watch?v=Ir2KO3cC5f0 
 Ada fruit board for datalogger with SD card
   https://learn.adafruit.com/adafruit-data-logger-shield 
-
+Link to formatting SD cards before use
+  https://www.sdcard.org/downloads/formatter_4/
+Wiring and code for Adafruit RH/Temp/Pressure sensor (BME/BMP280)
+  https://learn.adafruit.com/adafruit-bmp280-barometric-pressure-plus-temperature-sensor-breakout/wiring-and-test
 
 Photoreceptors
   http://www.deviceplus.com/how-tos/arduino-guide/entry015/
